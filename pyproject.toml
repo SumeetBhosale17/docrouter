@@ -1,0 +1,53 @@
+[project]
+name = "docrouter"
+version = "0.1.0"
+description = "A layout-aware multimodal RAG system for intelligent PDF understanding and retrieval."
+readme = "README.md"
+authors = [
+    { name = "SumeetBhosale17", email = "sumeetbhosale1947@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "pymupdf>=1.28.0",
+]
+
+[project.scripts]
+docrouter = "docrouter:main"
+
+[build-system]
+requires = ["uv_build>=0.12.0,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.6.1",
+    "pyright>=1.1.411",
+    "pytest>=9.1.1",
+    "ruff>=0.16.0",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "UP",
+    "B",
+]
+
+[tool.pyright]
+include = ["src", "tests"]
+
+typeCheckingMode = "basic"
+
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "--import-mode=importlib"
