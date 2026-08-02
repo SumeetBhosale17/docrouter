@@ -1,20 +1,26 @@
-from pathlib import Path
-
+from docrouter.chunking import chunk_paragraphs
 from docrouter.extract import extract_paragraphs
-from docrouter.tables import extract_tables_as_markdown, get_table_bboxes, has_table
+from docrouter.generate import generate_answer
+from docrouter.index import build_index, retrieve
+from docrouter.tables import extract_tables_as_markdown, get_table_bboxes
 
-if __name__ == "__main__":
-    folder_path = Path("test_pdfs")
-    pdf_files = folder_path.glob("**/*.pdf")
+pdf_path = "test_pdfs/clean_text_1.pdf"
 
-    for pdf_file in pdf_files:
-        print(f"PDF name: {str(pdf_file)}")
-        print(has_table(str(pdf_file)))
-        print(extract_tables_as_markdown(str(pdf_file)))
+table_bboxes = get_table_bboxes(pdf_path)
+paragraphs = extract_paragraphs(pdf_path, table_bboxes=table_bboxes)
+tables = extract_tables_as_markdown(pdf_path)
 
-        print("Paragraphs:")
-        paragraphs = extract_paragraphs(str(pdf_file), get_table_bboxes(str(pdf_file)))
-        for p in paragraphs:
-            print(repr(p))
+chunks = chunk_paragraphs(paragraphs) + tables
+index, model = build_index(chunks)
 
-        print("\n\n")
+questions = [
+    "What value is associated with Beta in the table?",
+    "What value is associated with Gamma in the table?",
+]
+
+for q in questions:
+    print(f"\nQ: {q}")
+    retrieved = retrieve(q, chunks, index, model, k=3)
+    for score, c in retrieved:
+        print(f"    [{score:.3f}]", repr(c[:80]))
+    print("\nAnswer: ", generate_answer(q, retrieved))
