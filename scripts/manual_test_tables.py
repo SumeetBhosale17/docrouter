@@ -7,7 +7,7 @@ from docrouter.tables import extract_tables_as_markdown, get_table_bboxes
 pdf_path = "test_pdfs/clean_text_1.pdf"
 
 table_bboxes = get_table_bboxes(pdf_path)
-paragraphs = extract_paragraphs(pdf_path, table_bboxes=table_bboxes)
+paragraphs = extract_paragraphs(pdf_path, table_bboxes)
 tables = extract_tables_as_markdown(pdf_path)
 
 chunks = chunk_paragraphs(paragraphs) + tables

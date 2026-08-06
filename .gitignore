@@ -9,6 +9,8 @@ __pycache__/
 .ruff_cache/
 .pyright/
 
+.cache/
+
 .coverage
 htmlcov/
 
