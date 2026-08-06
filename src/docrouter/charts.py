@@ -15,7 +15,9 @@ def get_raster_bboxes(pdf_path: str) -> list[list[tuple[float, float, float, flo
     return result
 
 
-def get_vector_chart_bbox(page: fitz.Page) -> tuple[float, float, float, float] | None:
+def get_vector_chart_bbox(
+    page: fitz.Page, padding: float = 20.0
+) -> tuple[float, float, float, float] | None:
     """Union bbox of a page's chart-like vector drawings"""
     drawings = page.get_drawings()
     if not drawings:
@@ -27,12 +29,11 @@ def get_vector_chart_bbox(page: fitz.Page) -> tuple[float, float, float, float] 
     if max_items < 2 and not has_color_fill:
         return None
     rects = [d["rect"] for d in drawings]
-    return (
-        min(r.x0 for r in rects),
-        min(r.y0 for r in rects),
-        max(r.x1 for r in rects),
-        max(r.y1 for r in rects),
-    )
+    x0 = min(r.x0 for r in rects) - padding
+    y0 = min(r.y0 for r in rects) - padding
+    x1 = max(r.x1 for r in rects) + padding
+    y1 = max(r.y1 for r in rects) + padding
+    return tuple(fitz.Rect(x0, y0, x1, y1) & page.rect)
 
 
 def get_vector_chart_bboxes(
@@ -47,21 +48,10 @@ def get_vector_chart_bboxes(
     return result
 
 
-def render_region(
-    pdf_path: str,
-    page_num: int,
-    bbox: tuple,
-    dpi: int = 150,
-    padding: float = 20.0,
-) -> bytes:
+def render_region(pdf_path: str, page_num: int, bbox: tuple, dpi: int = 150) -> bytes:
     doc = fitz.open(pdf_path)
-    page = doc[page_num]
-    x0, y0, x1, y1 = bbox
-    padded = (
-        fitz.Rect(x0 - padding, y0 - padding, x1 + padding, y1 + padding) & page.rect
-    )
     zoom = dpi / 72
-    pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), clip=padded)
+    pix = doc[page_num].get_pixmap(matrix=fitz.Matrix(zoom, zoom), clip=fitz.Rect(bbox))
     png_bytes = pix.tobytes("png")
     doc.close()
     return png_bytes

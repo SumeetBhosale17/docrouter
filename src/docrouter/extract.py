@@ -35,14 +35,14 @@ def extract_text(pdf_path: str) -> str:
 
 def extract_paragraphs(
     pdf_path: str,
-    table_bboxes: list[list[tuple]] | None = None,
+    exclude_bboxes: list[list[tuple]] | None = None,
 ) -> list[str]:
     """Extract text as paragraph-level blocks using PyMuPDF's own layout
     detection, instead of one flattened string sliced by character count."""
     doc: Any = fitz.open(pdf_path)
     paragraphs = []
     for page_num, page in enumerate(doc):
-        page_tables = table_bboxes[page_num] if table_bboxes else []
+        page_tables = exclude_bboxes[page_num] if exclude_bboxes else []
         for block in page.get_text("blocks"):
             bbox, text = block[:4], block[4].strip()
             if not text:
