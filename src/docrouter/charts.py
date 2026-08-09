@@ -1,4 +1,9 @@
+import re
+
 import fitz
+from transformers import AutoTokenizer
+
+_tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
 
 
 def get_raster_bboxes(pdf_path: str) -> list[list[tuple[float, float, float, float]]]:
@@ -12,6 +17,41 @@ def get_raster_bboxes(pdf_path: str) -> list[list[tuple[float, float, float, flo
             bboxes.extend(tuple(r) for r in page.get_image_rects(xref))
         result.append(bboxes)
     doc.close()
+    return result
+
+
+def _split_by_token_limit(
+    text: str, max_tokens=254, overlap_tokens: int = 20
+) -> list[str]:
+    encoding = _tokenizer(
+        text,
+        add_special_tokens=False,
+        return_offsets_mapping=True,
+        truncation=False,
+    )
+    offsets = encoding["offset_mapping"]
+    if len(offsets) <= max_tokens:
+        return [text]
+    chunks = []
+    start = 0
+    while start < len(offsets):
+        end = min(start + max_tokens, len(offsets))
+        chunks.append(text[offsets[start][0] : offsets[end - 1][1]])
+        if end == len(offsets):
+            break
+        start = end - overlap_tokens
+    return chunks
+
+
+def split_chart_description(description: str) -> list[str]:
+    """Gemini organizes multi-panel chart descriptions with numbered
+    markdown headers - split on those instead of embedding one oversized
+    blob that risks silent truncation"""
+    header_parts = re.split(r"(?=^\*\*.*?:\*\*)", description, flags=re.MULTILINE)
+    header_parts = [p.strip() for p in header_parts if p.strip()]
+    result = []
+    for part in header_parts:
+        result.extend(_split_by_token_limit(part))
     return result
 
 

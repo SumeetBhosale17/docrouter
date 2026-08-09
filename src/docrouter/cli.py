@@ -7,7 +7,12 @@ import argparse
 import sys
 from pathlib import Path
 
-from docrouter.charts import get_raster_bboxes, get_vector_chart_bboxes, render_region
+from docrouter.charts import (
+    get_raster_bboxes,
+    get_vector_chart_bboxes,
+    render_region,
+    split_chart_description,
+)
 from docrouter.chunking import chunk_paragraphs
 from docrouter.describe import describe_chart_cached
 from docrouter.extract import extract_paragraphs
@@ -50,7 +55,8 @@ def build_chunks_for_pdf(pdf_path: str) -> list[str]:
     ):
         for bbox in raster + vector:
             img_bytes = render_region(pdf_path, page_num, bbox)
-            chart_chunks.append(describe_chart_cached(img_bytes))
+            description = describe_chart_cached(img_bytes)
+            chart_chunks.extend(split_chart_description(description))
 
     return text_chunks + table_chunks + chart_chunks
 
