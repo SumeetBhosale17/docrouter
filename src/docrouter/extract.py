@@ -2,6 +2,10 @@ from typing import Any
 
 import fitz
 
+from docrouter.ocr import ocr_page_text
+
+TEXT_LAYER_MIN_CHARS = 20
+
 
 def _look_like_heading(text: str, max_len: int = 60) -> bool:
     """Heuristic: short, and doesn't end in sentence-ending punctuation -
@@ -33,6 +37,13 @@ def extract_text(pdf_path: str) -> str:
     return text
 
 
+def _split_ocr_text(text: str) -> list[str]:
+    """Teserract inserts blank line between segmented blocks -
+    mirrors the paragraph boundaries get_text('blocks') gives natively.
+    Use it the same way, instead of treating the whole page as one blob."""
+    return [p.strip() for p in text.split("\n\n") if p.strip()]
+
+
 def extract_paragraphs(
     pdf_path: str,
     exclude_bboxes: list[list[tuple]] | None = None,
@@ -42,14 +53,20 @@ def extract_paragraphs(
     doc: Any = fitz.open(pdf_path)
     paragraphs = []
     for page_num, page in enumerate(doc):
-        page_tables = exclude_bboxes[page_num] if exclude_bboxes else []
-        for block in page.get_text("blocks"):
-            bbox, text = block[:4], block[4].strip()
-            if not text:
-                continue
-            if any(_overlap_fraction(bbox, t) > 0.5 for t in page_tables):
-                continue
-            paragraphs.append(text)
+        page_exclude = exclude_bboxes[page_num] if exclude_bboxes else []
+        text = page.get_text()
+        if len(text.strip()) > TEXT_LAYER_MIN_CHARS:
+            for block in page.get_text("blocks"):
+                bbox, block_text = block[:4], block[4].strip()
+                if not block_text or any(
+                    _overlap_fraction(bbox, t) > 0.5 for t in page_exclude
+                ):
+                    continue
+                paragraphs.append(block_text)
+        else:
+            ocr_text = ocr_page_text(pdf_path, page_num).strip()
+            if ocr_text:
+                paragraphs.extend(_split_ocr_text(ocr_text))
     doc.close()
     return merge_headings(paragraphs)
 
