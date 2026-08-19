@@ -1,21 +1,27 @@
+import io
+
 import faiss
 import numpy as np
+from PIL import Image
 from sentence_transformers import SentenceTransformer
 
-MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+CLIP_MODEL_NAME = "clip-ViT-B-32"
 
 
-def build_index(chunks: list[str]) -> tuple[faiss.Index, SentenceTransformer]:
-    model = SentenceTransformer(MODEL_NAME)
-    embeddings = model.encode(chunks, normalize_embeddings=True)
+def build_clip_index(
+    image_bytes_list: list[bytes],
+) -> tuple[faiss.Index, SentenceTransformer]:
+    model = SentenceTransformer(CLIP_MODEL_NAME)
+    images = [Image.open(io.BytesIO(b)) for b in image_bytes_list]
+    embeddings = model.encode(images, normalize_embeddings=True)
     index = faiss.IndexFlatIP(embeddings.shape[1])
     index.add(np.array(embeddings, dtype="float32"))
     return index, model
 
 
-def retrieve(
+def retrieve_by_image(
     query: str,
-    chunks: list[str],
+    payloads: list[str],
     index: faiss.Index,
     model: SentenceTransformer,
     k: int = 3,
@@ -23,4 +29,4 @@ def retrieve(
     k = min(k, index.ntotal)
     q_emb = model.encode([query], normalize_embeddings=True)
     scores, idxs = index.search(np.array(q_emb, dtype="float32"), k)
-    return list(zip(scores[0].tolist(), [chunks[i] for i in idxs[0]], strict=False))
+    return list(zip(scores[0].tolist(), [payloads[i] for i in idxs[0]], strict=True))
