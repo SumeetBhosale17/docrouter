@@ -53,10 +53,17 @@ def build_chunks_for_pdf(pdf_path: str) -> list[str]:
     for page_num, (raster, vector) in enumerate(
         zip(raster_bboxes, vector_bboxes, strict=True)
     ):
-        for bbox in raster + vector:
+        for bbox in raster:
             img_bytes = render_region(pdf_path, page_num, bbox)
+            source_label = f"raster image, page {page_num + 1}"
             description = describe_chart_cached(img_bytes)
-            chart_chunks.extend(split_chart_description(description))
+            chart_chunks.extend(split_chart_description(description, source_label))
+
+        for bbox in vector:
+            img_bytes = render_region(pdf_path, page_num, bbox)
+            source_label = f"vector graphic, page {page_num + 1}"
+            description = describe_chart_cached(img_bytes)
+            chart_chunks.extend(split_chart_description(description, source_label))
 
     return text_chunks + table_chunks + chart_chunks
 

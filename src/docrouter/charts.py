@@ -43,7 +43,7 @@ def _split_by_token_limit(
     return chunks
 
 
-def split_chart_description(description: str) -> list[str]:
+def split_chart_description(description: str, source_label: str = "") -> list[str]:
     """Gemini organizes multi-panel chart descriptions with numbered
     markdown headers - split on those instead of embedding one oversized
     blob that risks silent truncation"""
@@ -51,7 +51,10 @@ def split_chart_description(description: str) -> list[str]:
     header_parts = [p.strip() for p in header_parts if p.strip()]
     result = []
     for part in header_parts:
-        result.extend(_split_by_token_limit(part))
+        pieces = _split_by_token_limit(part)
+        if source_label:
+            pieces = [f"[{source_label}] {p}" for p in pieces]
+        result.extend(pieces)
     return result
 
 
