@@ -11,6 +11,8 @@ CLIP_MODEL_NAME = "clip-ViT-B-32"
 def build_clip_index(
     image_bytes_list: list[bytes],
 ) -> tuple[faiss.Index, SentenceTransformer]:
+    if not image_bytes_list:
+        raise ValueError("Cannot build a CLIP index from zero images.")
     model = SentenceTransformer(CLIP_MODEL_NAME)
     images = [Image.open(io.BytesIO(b)) for b in image_bytes_list]
     embeddings = model.encode(images, normalize_embeddings=True)
