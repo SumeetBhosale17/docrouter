@@ -136,12 +136,26 @@ def _candidate_drawings(
     return result
 
 
+def _text_density(page: fitz.Page, rect: fitz.Rect) -> float:
+    """Fraction of a region's area covered by text blocks. A chart is mostly
+    ink and whitespace with sparse labels; a table is mostly text."""
+    if not rect.get_area():
+        return 0.0
+    covered = sum(
+        (fitz.Rect(blk[:4]) & rect).get_area()
+        for blk in page.get_text("blocks")
+        if blk[4].strip()
+    )
+    return covered / rect.get_area()
+
+
 def get_page_vector_bboxes(
     page: fitz.Page,
     padding: float = VECTOR_CLUSTER_PADDING,
     min_page_frac: float = 0.01,
     max_page_frac: float = 0.6,
     max_text_frac: float = 0.35,
+    max_text_density: float = 0.5,
     min_items: int = 2,
 ) -> list[tuple[float, float, float, float]]:
     """Vector figure regions on one page.
@@ -153,7 +167,13 @@ def get_page_vector_bboxes(
     mode a missed figure rather than a silently emptied page: reject a
     cluster that spans most of the sheet, and reject one that swallows more
     than max_text_frac of the page's text blocks - that is a page, not a
-    chart."""
+    chart.
+
+    Ruled tables are the other trap: their ruling lines look exactly like
+    chart vectors, and a table swallowed this way loses its rows to the
+    exclusion mask while coming back only as Gemini prose. Text density
+    separates the two cleanly - on attention.pdf, Tables 2 and 4 measure
+    0.74 and 0.77 against 0.11-0.12 for real charts."""
     page_area = page.rect.get_area()
     if not page_area:
         return []
@@ -185,6 +205,9 @@ def get_page_vector_bboxes(
             )
             if swallowed > max_text_frac * len(blocks):
                 continue
+
+        if _text_density(page, rect) > max_text_density:
+            continue
 
         padded = fitz.Rect(rect) + (-padding, -padding, padding, padding)
         result.append(_as_tuple(padded & page.rect))
@@ -230,11 +253,17 @@ def _split_by_token_limit(
     text: str, max_tokens: int = 254, overlap_tokens: int = 20
 ) -> list[str]:
     overlap_tokens = max(0, min(overlap_tokens, max_tokens - 1))
+    # verbose=False: the tokenizer warns that the sequence exceeds the
+    # model's 512-token input whenever it is handed a long description. Only
+    # the offsets are used here, never the ids, so nothing is at risk - and
+    # splitting on those offsets is the very thing that keeps every emitted
+    # chunk under the limit.
     encoding = _get_tokenizer()(
         text,
         add_special_tokens=False,
         return_offsets_mapping=True,
         truncation=False,
+        verbose=False,
     )
     offsets = encoding["offset_mapping"]
     if len(offsets) <= max_tokens:

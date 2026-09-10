@@ -8,9 +8,18 @@ def has_table(pdf_path: str) -> list[bool]:
         return [len(page.find_tables()) > 0 for page in pdf.pages]
 
 
+def _clean_cell(cell: str | None) -> str:
+    """A wrapped cell arrives with newlines in it, and a newline inside a
+    markdown row splits that row in half - the emitted table stops being a
+    table. Pipes have to go for the same reason."""
+    if not cell:
+        return ""
+    return " ".join(cell.split()).replace("|", "\\|")
+
+
 def _rows_to_markdown(rows: list[list[str | None]]) -> str:
     cleaned_rows: list[list[str]] = [
-        [cell if cell is not None else "" for cell in row] for row in rows
+        [_clean_cell(cell) for cell in row] for row in rows
     ]
 
     if not cleaned_rows:
@@ -30,6 +39,11 @@ def _is_real_table(rows: list[list[str | None]]) -> bool:
     detector fires on dense grid-aligned chart labels as often as on
     real tables. Genuine tables have substantial per-cell text;
     misfires are mostly-empty grids holding bare short numbers."""
+    # A single column carries no relational structure, and a header with no
+    # body carries no data. Both come back as markdown that reads worse than
+    # the prose it was cut out of, so leave them in the text layer.
+    if len(rows) < 2 or len(rows[0]) < 2:
+        return False
     cells = [c for row in rows for c in row if c]
     total_cells = sum(len(row) for row in rows)
     if not cells or not total_cells:
