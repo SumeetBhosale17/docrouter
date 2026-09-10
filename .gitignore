@@ -24,3 +24,9 @@ build/
 test_pdfs/
 
 .nope
+
+# Personal working notes - kept locally, not published
+PLAN.md
+EVAL.md
+DEPLOY.md
+INTERVIEW.md
