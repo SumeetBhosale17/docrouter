@@ -19,7 +19,8 @@ from docrouter.chunking import chunk_paragraphs
 from docrouter.describe import describe_chart_cached
 from docrouter.extract import extract_paragraphs
 from docrouter.generate import generate_answer
-from docrouter.index import build_index, retrieve
+from docrouter.index import build_index, retrieve_hybrid
+from docrouter.lexical import build_lexical_index
 from docrouter.tables import find_real_tables
 
 
@@ -107,6 +108,7 @@ def main() -> None:
 
     print(f"Indexed {len(all_chunks)} chunks from {len(pdf_paths)} file(s).")
     index, model = build_index(all_chunks)
+    lexical_index = build_lexical_index(all_chunks)
 
     if args.dump_chunks:
         for i, c in enumerate(all_chunks):
@@ -114,7 +116,9 @@ def main() -> None:
         return
 
     if args.question:
-        retrieved = retrieve(args.question, all_chunks, index, model, k=3)
+        retrieved = retrieve_hybrid(
+            args.question, all_chunks, index, model, lexical_index, k=3
+        )
         print(generate_answer(args.question, retrieved))
         return
 
@@ -125,7 +129,7 @@ def main() -> None:
             break
         if not query:
             continue
-        retrieved = retrieve(query, all_chunks, index, model, k=3)
+        retrieved = retrieve_hybrid(query, all_chunks, index, model, lexical_index, k=3)
         print(generate_answer(query, retrieved))
 
 

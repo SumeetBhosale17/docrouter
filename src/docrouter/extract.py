@@ -1,3 +1,4 @@
+import re
 from typing import Any
 
 import fitz
@@ -5,6 +6,29 @@ import fitz
 from docrouter.ocr import ocr_page_text
 
 TEXT_LAYER_MIN_CHARS = 20
+
+# Private Use Area. A PDF whose fonts ship no usable ToUnicode CMap extracts
+# its glyphs as these, and both PyMuPDF and pdfplumber return them verbatim.
+_PUA_RE = re.compile(r"[\ue000-\uf8ff\U000f0000-\U000ffffd]")
+_PUA_BETWEEN_DIGITS_RE = re.compile(
+    r"(?<=[0-9])[\ue000-\uf8ff\U000f0000-\U000ffffd](?=[0-9])"
+)
+
+
+def normalize_pua(text: str) -> str:
+    """Make private-use glyphs harmless.
+
+    attention.pdf carries 56 of them, and they fuse into neighbouring words
+    to make tokens no query can match: "0.9" indexes as "0<U+E004>9".
+
+    The codes are font-relative and genuinely ambiguous - U+E004 is a period
+    in "0.9" but an ellipsis in "(x1, ..., xn)", and U+E000 is a period in
+    "d^-0.5" but a summation sign in "q.k = SUM q_i k_i" - so there is no
+    honest per-character mapping to recover. Only one case is unambiguous: a
+    private-use glyph flanked by digits is a decimal point. That is restored;
+    everything else becomes a space, which invents no character that was not
+    there while still letting the surrounding words tokenize cleanly."""
+    return _PUA_RE.sub(" ", _PUA_BETWEEN_DIGITS_RE.sub(".", text))
 
 
 def _look_like_heading(text: str, max_len: int = 60) -> bool:
@@ -57,14 +81,14 @@ def extract_paragraphs(
         text = page.get_text()
         if len(text.strip()) > TEXT_LAYER_MIN_CHARS:
             for block in page.get_text("blocks"):
-                bbox, block_text = block[:4], block[4].strip()
+                bbox, block_text = block[:4], normalize_pua(block[4]).strip()
                 if not block_text or any(
                     _overlap_fraction(bbox, t) > 0.5 for t in page_exclude
                 ):
                     continue
                 paragraphs.append(block_text)
         else:
-            ocr_text = ocr_page_text(pdf_path, page_num).strip()
+            ocr_text = normalize_pua(ocr_page_text(pdf_path, page_num)).strip()
             if ocr_text:
                 paragraphs.extend(_split_ocr_text(ocr_text))
     doc.close()

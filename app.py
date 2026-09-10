@@ -11,7 +11,8 @@ import streamlit as st
 
 from docrouter.cli import build_chunks_for_pdf
 from docrouter.generate import generate_answer
-from docrouter.index import build_index, retrieve
+from docrouter.index import build_index, retrieve_hybrid
+from docrouter.lexical import build_lexical_index
 
 st.set_page_config(page_title="docrouter", page_icon="📄")
 st.title("docrouter - multimodal document Q&A")
@@ -20,6 +21,7 @@ if "chunks" not in st.session_state:
     st.session_state.chunks = []
     st.session_state.index = None
     st.session_state.model = None
+    st.session_state.lexical_index = None
     st.session_state.indexed_files = []
 
 uploaded_files = st.file_uploader(
@@ -32,6 +34,7 @@ if uploaded_files and st.button("Index documents"):
     st.session_state.chunks = []
     st.session_state.index = None
     st.session_state.model = None
+    st.session_state.lexical_index = None
     st.session_state.indexed_files = []
 
     all_chunks = []
@@ -49,10 +52,12 @@ if uploaded_files and st.button("Index documents"):
 
     if all_chunks:
         index, model = build_index(all_chunks)
+        lexical_index = build_lexical_index(all_chunks)
         elapsed = time.perf_counter() - start_time
         st.session_state.chunks = all_chunks
         st.session_state.index = index
         st.session_state.model = model
+        st.session_state.lexical_index = lexical_index
         st.session_state.indexed_files = [f.name for f in uploaded_files]
         st.success(
             f"Indexed {len(all_chunks)} chunks from "
@@ -72,11 +77,12 @@ if st.session_state.index is not None:
             st.stop()
 
         with st.spinner("Retrieving and generating answer..."):
-            retrieved = retrieve(
+            retrieved = retrieve_hybrid(
                 question,
                 st.session_state.chunks,
                 st.session_state.index,
                 model,
+                st.session_state.lexical_index,
                 k=3,
             )
             answer = generate_answer(question, retrieved)
