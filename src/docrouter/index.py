@@ -1,3 +1,5 @@
+from typing import NamedTuple
+
 import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
@@ -5,6 +7,19 @@ from sentence_transformers import SentenceTransformer
 from docrouter.lexical import BM25Index, retrieve_lexical
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+
+
+class Retrieved(NamedTuple):
+    """A retrieved chunk, tagged with the arm that found it.
+
+    The arm matters for display: cosine similarity and BM25 are unrelated
+    scales, and showing a bare 8.084 next to a 0.784 reads as though the
+    former were the stronger match rather than a different unit entirely.
+    Compare scores only within one source."""
+
+    score: float
+    text: str
+    source: str
 
 
 def build_index(chunks: list[str]) -> tuple[faiss.Index, SentenceTransformer]:
@@ -38,7 +53,7 @@ def retrieve_hybrid(
     lexical_index: BM25Index,
     k: int = 3,
     backfill: int = 2,
-) -> list[tuple[float, str]]:
+) -> list[Retrieved]:
     """Dense results, then lexical hits the dense arm missed.
 
     Deliberately not reciprocal rank fusion. RRF weights both arms equally,
@@ -51,12 +66,15 @@ def retrieve_hybrid(
     Scores from the two arms are not comparable (cosine similarity vs BM25),
     so treat the returned score as a within-arm figure only.
     """
-    dense = retrieve(query, chunks, index, model, k=k)
+    dense = [
+        Retrieved(score, chunk, "dense")
+        for score, chunk in retrieve(query, chunks, index, model, k=k)
+    ]
     if backfill <= 0:
         return dense
-    seen = {chunk for _, chunk in dense}
+    seen = {item.text for item in dense}
     extra = [
-        (score, chunk)
+        Retrieved(score, chunk, "lexical")
         for score, chunk in retrieve_lexical(
             query, chunks, lexical_index, k=k + backfill
         )

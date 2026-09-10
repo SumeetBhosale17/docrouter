@@ -91,6 +91,6 @@ if st.session_state.index is not None:
         st.write(answer)
 
         with st.expander("Show retrieved context"):
-            for score, chunk in retrieved:
-                st.markdown(f"**[{score:.3f}]**")
-                st.text(chunk)
+            for item in retrieved:
+                st.markdown(f"**{item.source}** · {item.score:.3f}")
+                st.text(item.text)

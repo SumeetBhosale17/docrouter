@@ -1,4 +1,5 @@
 import time
+from collections.abc import Sequence
 
 from dotenv import load_dotenv
 from google import genai
@@ -70,8 +71,11 @@ def generate_with_fallback(
     ) from last_error
 
 
-def build_prompt(query: str, retrieved: list[tuple[float, str]]) -> str:
-    context = "\n\n---\n\n".join(chunk for _, chunk in retrieved)
+def build_prompt(query: str, retrieved: Sequence[Sequence]) -> str:
+    # Indexed rather than unpacked so this takes both the (score, text) pairs
+    # retrieve() returns and the (score, text, source) triples from
+    # retrieve_hybrid().
+    context = "\n\n---\n\n".join(item[1] for item in retrieved)
     return (
         "Answer the question using ONLY the context below. "
         "If the context doesn't contain the answer, say so explicitly "
@@ -86,7 +90,7 @@ def build_prompt(query: str, retrieved: list[tuple[float, str]]) -> str:
     )
 
 
-def generate_answer(query: str, retrieved: list[tuple[float, str]]) -> str:
+def generate_answer(query: str, retrieved: Sequence[Sequence]) -> str:
     return generate_with_fallback(
         build_prompt(query, retrieved),
         config=types.GenerateContentConfig(temperature=0.1),

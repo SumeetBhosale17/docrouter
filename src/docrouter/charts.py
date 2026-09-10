@@ -1,19 +1,11 @@
 import re
-from functools import lru_cache
 
 import fitz
 
+from docrouter.chunking import EMBED_TOKEN_LIMIT, count_tokens, split_by_token_limit
+
 RASTER_CLUSTER_PADDING = 45.0
 VECTOR_CLUSTER_PADDING = 20.0
-
-
-@lru_cache(maxsize=1)
-def _get_tokenizer():
-    """Loaded on first use, not at import - importing this module should not
-    require a HuggingFace round-trip on a cold cache."""
-    from transformers import AutoTokenizer
-
-    return AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
 
 
 def _union(rects: list[fitz.Rect]) -> fitz.Rect:
@@ -249,46 +241,17 @@ def render_region(pdf_path: str, page_num: int, bbox: tuple, dpi: int = 150) -> 
         doc.close()
 
 
-def _split_by_token_limit(
-    text: str, max_tokens: int = 254, overlap_tokens: int = 20
-) -> list[str]:
-    overlap_tokens = max(0, min(overlap_tokens, max_tokens - 1))
-    # verbose=False: the tokenizer warns that the sequence exceeds the
-    # model's 512-token input whenever it is handed a long description. Only
-    # the offsets are used here, never the ids, so nothing is at risk - and
-    # splitting on those offsets is the very thing that keeps every emitted
-    # chunk under the limit.
-    encoding = _get_tokenizer()(
-        text,
-        add_special_tokens=False,
-        return_offsets_mapping=True,
-        truncation=False,
-        verbose=False,
-    )
-    offsets = encoding["offset_mapping"]
-    if len(offsets) <= max_tokens:
-        return [text]
-    chunks = []
-    start = 0
-    while start < len(offsets):
-        end = min(start + max_tokens, len(offsets))
-        chunks.append(text[offsets[start][0] : offsets[end - 1][1]])
-        if end == len(offsets):
-            break
-        start = end - overlap_tokens
-    return chunks
-
-
 def split_chart_description(description: str, source_label: str = "") -> list[str]:
     """Gemini organizes multi-panel chart descriptions with numbered markdown
     headers - split on those instead of embedding one oversized blob that
     risks silent truncation."""
     header_parts = re.split(r"(?=^\*\*.*?:\*\*)", description, flags=re.MULTILINE)
     header_parts = [p.strip() for p in header_parts if p.strip()]
+    prefix = f"[{source_label}] " if source_label else ""
+    # The prefix has to come out of the budget, not go on after it: splitting
+    # to the limit and then prepending pushed every labelled piece over it.
+    budget = EMBED_TOKEN_LIMIT - count_tokens(prefix) if prefix else EMBED_TOKEN_LIMIT
     result = []
     for part in header_parts:
-        pieces = _split_by_token_limit(part)
-        if source_label:
-            pieces = [f"[{source_label}] {p}" for p in pieces]
-        result.extend(pieces)
+        result.extend(f"{prefix}{p}" for p in split_by_token_limit(part, budget))
     return result
