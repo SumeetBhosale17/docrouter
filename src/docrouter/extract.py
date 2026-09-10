@@ -38,7 +38,7 @@ def extract_text(pdf_path: str) -> str:
 
 
 def _split_ocr_text(text: str) -> list[str]:
-    """Teserract inserts blank line between segmented blocks -
+    """Tesseract inserts blank line between segmented blocks -
     mirrors the paragraph boundaries get_text('blocks') gives natively.
     Use it the same way, instead of treating the whole page as one blob."""
     return [p.strip() for p in text.split("\n\n") if p.strip()]

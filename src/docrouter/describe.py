@@ -1,25 +1,14 @@
 import hashlib
+import logging
 from pathlib import Path
 
 from google.genai import types
 
-from docrouter.generate import MODEL_NAME, get_client
+from docrouter.generate import generate_with_fallback
+
+logger = logging.getLogger(__name__)
 
 CACHE_DIR = Path(".cache/chart_descriptions")
-
-
-def describe_chart_cached(image_bytes: bytes) -> str:
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    key = hashlib.sha256(image_bytes).hexdigest()
-    cache_file = CACHE_DIR / f"{key}.txt"
-    if cache_file.exists():
-        print("    [cache hit]")
-        return cache_file.read_text()
-    print("    [cache miss - calling Gemini]")
-    description = describe_chart(image_bytes)
-    cache_file.write_text(description)
-    return description
-
 
 CHART_PROMPT = (
     "This image is a chart or figure extracted from a document. "
@@ -30,14 +19,24 @@ CHART_PROMPT = (
 
 
 def describe_chart(image_bytes: bytes) -> str:
-    client = get_client()
-    response = client.models.generate_content(
-        model=MODEL_NAME,
-        contents=[
+    return generate_with_fallback(
+        [
             CHART_PROMPT,
             types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
-        ],
+        ]
     )
-    if response.text is None:
-        raise ValueError("Model generated no text response.")
-    return response.text
+
+
+def describe_chart_cached(image_bytes: bytes) -> str:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    # The prompt is part of the key: a cache keyed on the image alone keeps
+    # serving answers to a question you have since rewritten.
+    key = hashlib.sha256(image_bytes + CHART_PROMPT.encode()).hexdigest()
+    cache_file = CACHE_DIR / f"{key}.txt"
+    if cache_file.exists():
+        logger.info("chart description cache hit")
+        return cache_file.read_text()
+    logger.info("chart description cache miss - calling Gemini")
+    description = describe_chart(image_bytes)
+    cache_file.write_text(description)
+    return description
